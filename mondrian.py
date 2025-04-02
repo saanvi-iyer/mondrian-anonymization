@@ -1,6 +1,3 @@
-"""
-main module of basic Mondrian
-"""
 #!/usr/bin/env python
 # coding=utf-8
 
@@ -20,14 +17,6 @@ QI_RANGE = []
 IS_CAT = []
 
 class Partition(object):
-    """Class for Group, which is used to keep records
-    Store tree node in instances.
-    self.member: records in group
-    self.width: width of this partition on each domain. For categoric attribute, it equal
-    the number of leaf node, for numeric attribute, it equal to number range
-    self.middle: save the generalization result of this partition
-    self.allow: 0 donate that not allow to split, 1 donate can be split
-    """
     def __init__(self, data, width, middle):
         self.member = list(data)
         self.width = list(width)
@@ -193,7 +182,13 @@ def split_partition(partition, dim):
     else:
         return split_categorical(partition, dim, pwidth, pmiddle)
 
-def anonymize(partition):
+def adjust_k(partition, current_k):
+    min_size = min([len(p.member) for p in RESULT] + [len(partition.member)]) if RESULT else len(partition.member)
+    return max(current_k, int(min_size / 2)) if min_size < current_k * 2 else current_k
+
+def anonymize(partition, k):
+    global GL_K
+    GL_K = k
     if check_splitable(partition) is False:
         RESULT.append(partition)
         return
@@ -204,10 +199,12 @@ def anonymize(partition):
     sub_partitions = split_partition(partition, dim)
     if len(sub_partitions) == 0:
         partition.allow[dim] = 0
-        anonymize(partition)
+        anonymize(partition, k)
     else:
+        new_k = adjust_k(partition, k)
+        GL_K = new_k
         for sub_p in sub_partitions:
-            anonymize(sub_p)
+            anonymize(sub_p, new_k)
 
 def check_splitable(partition):
     temp = sum(partition.allow)
@@ -247,7 +244,7 @@ def mondrian(att_trees, data, k, QI_num=-1):
             middle.append('*')
     whole_partition = Partition(data, wtemp, middle)
     start_time = time.time()
-    anonymize(whole_partition)
+    anonymize(whole_partition, k)
     rtime = float(time.time() - start_time)
     ncp = 0.0
     for partition in RESULT:
